@@ -1,0 +1,5 @@
+HW1_MODE=server
+HW1_HOST=
+HW1_PORT=21
+HW1_DIRECTORY=ftp_rfc_server/data_folder
+HW1_USERS=ftp_rfc_server/example_users.tsv
