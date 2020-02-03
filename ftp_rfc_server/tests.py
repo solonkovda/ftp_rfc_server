@@ -166,7 +166,7 @@ def run(config):
             ok = run_test_mode(config, True, 'anonymous', '', 'C') and ok
     except Exception as e:
         if 'HW1_QUIET' not in os.environ:
-            print(e)
+            traceback.print_exc()
         ok = False
     if ok:
         print('ok')

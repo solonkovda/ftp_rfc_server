@@ -5,10 +5,10 @@ import os
 import hashlib
 import data_processing
 
-READY_FOR_NEW_USER = b"220 (solonkovda's ftp)\r\n"
-USER_LOGGED_IN = b'220 User logged in, proceed\r\n'
-SYST_RESPONSE = b'215 UNIX Type: L8\r\n'
-QUIT_RESPONSE = b'221 Goodbye.\r\n'
+READY_FOR_NEW_USER = b"220 (solonkovda's ftp)"
+USER_LOGGED_IN = b'220 User logged in, proceed'
+SYST_RESPONSE = b'215 UNIX Type: L8'
+QUIT_RESPONSE = b'221 Goodbye.'
 
 
 class FtpConnection(object):
@@ -26,13 +26,16 @@ class FtpConnection(object):
         self.type = FtpConnection.Type.ASCII
         self.addr = None
         self.root_dir = pathlib.Path(config.root_dir).resolve().absolute()
-        self.cwd = pathlib.Path.cwd()
+        self.cwd = self.root_dir
         self.passive_sock = None
         self.mode = 'S'
 
     def initial_setup(self):
         self.conn.settimeout(60)
-        self.conn.sendall(READY_FOR_NEW_USER)
+        self._send_message(READY_FOR_NEW_USER)
+
+    def _send_message(self, message):
+        self.conn.sendall(message + b'\r\n')
 
     def _get_byte(self):
         if self.buffer is None or self.buffer_offset == len(self.buffer):
@@ -123,22 +126,22 @@ class FtpConnection(object):
         if self.user == 'anonymous' or not self.config.auth_enabled:
             # Deviation from the RFC per homework request.
             self.logged_in = True
-            self.conn.sendall(b'230 User logged in, proceed\r\n')
+            self._send_message(b'230 User logged in, proceed')
             return
-        self.conn.sendall(b'331 Need password\r\n')
+        self._send_message(b'331 Need password')
 
     def syst_command(self, arg):
-        self.conn.sendall(SYST_RESPONSE)
+        self._send_message(SYST_RESPONSE)
 
     def quit_command(self, arg):
-        self.conn.sendall(QUIT_RESPONSE)
+        self._send_message(QUIT_RESPONSE)
 
     def type_command(self, arg):
         if arg[0] == 'A' or arg[0] == 'I':
-            self.conn.sendall(b'200 Switching to ASCII mode\r\n')
+            self._send_message(b'200 Switching to ASCII mode')
             self.type = FtpConnection.Type.ASCII
         else:
-            self.conn.sendall(b'500 Unrecognised TYPE command.\r\n')
+            self._send_message(b'500 Unrecognised TYPE command.')
 
     def port_command(self, arg):
         self._close_passive()
@@ -155,87 +158,87 @@ class FtpConnection(object):
             ok = False
         finally:
             if ok:
-                self.conn.sendall(b'200 PORT command successful\r\n')
+                self._send_message(b'200 PORT command successful')
             else:
-                self.conn.sendall(b'500 Illegal PORT command\r\n')
+                self._send_message(b'500 Illegal PORT command')
 
     def retr_command(self, arg):
         ok, path = self._resolve_path(arg)
         if not ok or not path.is_file():
-            self.conn.sendall(b'550 Invalid filepath\r\n')
+            self._send_message(b'550 Invalid filepath')
             return
-        self.conn.sendall(b'150 Opening data connection\r\n')
+        self._send_message(b'150 Opening data connection')
         with open(path, 'rb') as f:
             data = f.read()
         self._send_bytes_to_data_conn(data)
-        self.conn.sendall(b'226 RETR done\r\n')
+        self._send_message(b'226 RETR done')
 
     def stor_command(self, arg, mode='wb'):
         ok, path = self._resolve_path(arg)
         if not ok or not path.parent.is_dir():
-            self.conn.sendall(b'550 Invalid filepath\r\n')
+            self._send_message(b'550 Invalid filepath')
             return
-        self.conn.sendall(b'150 Opening data connection\r\n')
+        self._send_message(b'150 Opening data connection')
         data = self._recv_bytes_from_data_conn()
         with open(path, mode) as f:
             f.write(data)
-        self.conn.sendall(b'226 STOR DONE\r\n')
+        self._send_message(b'226 STOR DONE')
 
     def noop_command(self, arg):
-        self.conn.sendall(b'200 NOOP ok\r\n')
+        self._send_message(b'200 NOOP ok')
 
     def stru_command(self, arg):
         if arg != 'F':
-            self.conn.sendall(b'500 Invalid STRU command\r\n')
+            self._send_message(b'500 Invalid STRU command')
         else:
-            self.conn.sendall(b'200 Struct set to file\r\n')
+            self._send_message(b'200 Struct set to file')
 
     def cwd_command(self, arg):
         ok, new_path = self._resolve_path(arg)
         if not ok or not new_path.exists() or not new_path.is_dir():
-            self.conn.sendall(b'550 Invalid directory\r\n')
+            self._send_message(b'550 Invalid directory')
             return
         self.cwd = new_path
-        self.conn.sendall(b'250 Directory changed\r\n')
+        self._send_message(b'250 Directory changed')
 
     def dele_command(self, arg):
         ok, path = self._resolve_path(arg)
         if not ok or not path.is_file():
-            self.conn.sendall(b'550 Invalid filepath\r\n')
+            self._send_message(b'550 Invalid filepath')
             return
         os.remove(path)
-        self.conn.sendall(b'250 DELE done\r\n')
+        self._send_message(b'250 DELE done')
 
     def rmd_command(self, arg):
         ok, path = self._resolve_path(arg)
         if not ok or not path.is_dir():
-            self.conn.sendall(b'550 Invalid filepath\r\n')
+            self._send_message(b'550 Invalid filepath')
             return
         try:
             os.rmdir(path)
         except:
-            self.conn.sendall(b'550 Unable to delete directory\r\n')
+            self._send_message(b'550 Unable to delete directory')
             return
-        self.conn.sendall(b'226 RMD done\r\n')
+        self._send_message(b'226 RMD done')
 
     def mkd_command(self, arg):
         ok, path = self._resolve_path(arg)
         if not ok or path.exists() or not path.parent.is_dir():
-            self.conn.sendall(b'550 Invalid filepath\r\n')
+            self._send_message(b'550 Invalid filepath')
             return
         os.mkdir(path)
-        self.conn.sendall(b'226 MKD done\r\n')
+        self._send_message(b'226 MKD done')
 
     def nlst_command(self, arg):
         ok, path = self._resolve_path(arg)
         if not ok or not path.is_dir():
-            self.conn.sendall(b'550 Invalid filepath\r\n')
+            self._send_message(b'550 Invalid filepath')
             return
         files = os.listdir(path)
         data = ('\r\n'.join(files) + '\r\n').encode('ascii')
-        self.conn.sendall(b'150 Opening data connection\r\n')
+        self._send_message(b'150 Opening data connection')
         self._send_bytes_to_data_conn(data)
-        self.conn.sendall(b'226 NLST done\r\n')
+        self._send_message(b'226 NLST done')
 
     def pasv_command(self, arg):
         self._close_passive()
@@ -248,29 +251,29 @@ class FtpConnection(object):
         port = sock.getsockname()[1]
 
         text = ip.replace('.', ',')
-        message = '227 Entering Passive Mode (%s,%d,%d)\r\n' % (
+        message = '227 Entering Passive Mode (%s,%d,%d)' % (
             text, port // 256, port % 256)
-        self.conn.sendall(message.encode())
+        self._send_message(message.encode())
 
     def pass_command(self, arg):
         if self.user not in self.config.users or self.config.users[self.user] != arg:
-            self.conn.sendall(b'530 Wrong username or password\r\n')
+            self._send_message(b'530 Wrong username or password')
             return
-        self.conn.sendall(b'230 User logged in, proceed\r\n')
+        self._send_message(b'230 User logged in, proceed')
         self.logged_in = True
 
     def mode_command(self, arg):
         if arg == 'S':
-            self.conn.sendall(b'200 Mode set to stream\r\n')
+            self._send_message(b'200 Mode set to stream')
             self.mode = arg
         elif arg == 'B':
-            self.conn.sendall(b'200 Mode set to block\r\n')
+            self._send_message(b'200 Mode set to block')
             self.mode = arg
         elif arg == 'C':
-            self.conn.sendall(b'200 Mode set to compressed\r\n')
+            self._send_message(b'200 Mode set to compressed')
             self.mode = arg
         else:
-            self.conn.sendall(b'500 Invalid mode\r\n')
+            self._send_message(b'500 Invalid mode')
 
     def command_loop(self):
         while True:
@@ -282,7 +285,7 @@ class FtpConnection(object):
                 self.pass_command(arg)
             # Everything below requires authentication.
             elif not self.logged_in:
-                self.conn.sendall(b'530 Not logged in\r\n')
+                self._send_message(b'530 Not logged in')
             elif command == 'syst':
                 self.syst_command(arg)
             elif command == 'quit':
@@ -320,6 +323,8 @@ class FtpConnection(object):
                 self.pasv_command(arg)
             elif command == 'mode':
                 self.mode_command(arg)
+            else:
+                self._send_message('500 Unknown command\n')
 
     def handle(self):
         try:

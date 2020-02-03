@@ -15,7 +15,7 @@ class Configuration:
 
         user_file = os.environ.get('HW1_USERS', None)
         self.users = dict()
-        self.auth_enabled = os.environ.get('HW1_AUTH_DISABLED', 0) == 0
+        self.auth_enabled = os.environ.get('HW1_AUTH_DISABLED', 0) == '0'
         if user_file is not None:
             with open(user_file, 'r') as f:
                 users = f.readlines()
